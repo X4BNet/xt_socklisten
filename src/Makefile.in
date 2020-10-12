@@ -30,8 +30,8 @@ sparse: | match/xt_socklisten.c Makefile
 minstall: | match/xt_socklisten.ko
 	@echo " *"
 	make -C $(KDIR) M=$(CURDIR) modules_install INSTALL_MOD_PATH=$(DESTDIR)
-	mv /lib/modules/$(KVERSION)/extra/match/* /lib/modules/$(KVERSION)/extra
-	rm /lib/modules/$(KVERSION)/extra/match -R
+	mv $(KINSTDIR)/extra/match/* /lib/modules/$(KVERSION)/extra
+	rm $(KINSTDIR)/extra/match -R
 	$(DEPMOD)
 mclean:
 	make -C $(KDIR) M=$(CURDIR) clean
