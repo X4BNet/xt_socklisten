@@ -44,7 +44,7 @@ libxt_socklisten_sh.o: match/libxt_socklisten.c
 	gcc -O2 -Wall -Wunused $(IPTABLES_CFLAGS) -fPIC -o $@ -c match/libxt_socklisten.c
 
 %.so: %_sh.o
-	gcc -shared -o $@ $<
+	gcc -shared -lxtables -o $@ $<
 
 linstall: | libxt_socklisten.so
 	@echo " *"
