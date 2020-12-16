@@ -148,9 +148,9 @@ socklisten_match(const struct sk_buff *skb, struct xt_action_param *par,
 		bool transparent = true;
 
 		/* Ignore sockets listening on INADDR_ANY,
-		 * unless XT_SOCKLISTEN_NOWILDCARD is set
+		 * unless XT_SOCKLISTEN_WILDCARD is set
 		 */
-		wildcard = (!(info->flags & XT_SOCKLISTEN_NOWILDCARD) &&
+		wildcard = (!(info->flags & XT_SOCKLISTEN_WILDCARD) &&
 			    sk_fullsock(sk) &&
 			    inet_sk(sk)->inet_rcv_saddr == 0);
 
@@ -209,9 +209,9 @@ socklisten_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 		bool transparent = true;
 
 		/* Ignore sockets listening on INADDR_ANY
-		 * unless XT_SOCKLISTEN_NOWILDCARD is set
+		 * unless XT_SOCKLISTEN_WILDCARD is set
 		 */
-		wildcard = (!(info->flags & XT_SOCKLISTEN_NOWILDCARD) &&
+		wildcard = (!(info->flags & XT_SOCKLISTEN_WILDCARD) &&
 			    sk_fullsock(sk) &&
 			    ipv6_addr_any(&sk->sk_v6_rcv_saddr));
 

@@ -9,7 +9,7 @@
 
 enum {
 	O_TRANSPARENT = 0,
-	O_NOWILDCARD = 1,
+	O_WILDCARD = 1,
 	O_RESTORESKMARK = 2,
 };
 
@@ -20,13 +20,13 @@ static const struct xt_option_entry socklisten_mt_opts[] = {
 
 static const struct xt_option_entry socklisten_mt_opts_v2[] = {
 	{.name = "transparent", .id = O_TRANSPARENT, .type = XTTYPE_NONE},
-	{.name = "nowildcard", .id = O_NOWILDCARD, .type = XTTYPE_NONE},
+	{.name = "wildcard", .id = O_WILDCARD, .type = XTTYPE_NONE},
 	XTOPT_TABLEEND,
 };
 
 static const struct xt_option_entry socklisten_mt_opts_v3[] = {
 	{.name = "transparent", .id = O_TRANSPARENT, .type = XTTYPE_NONE},
-	{.name = "nowildcard", .id = O_NOWILDCARD, .type = XTTYPE_NONE},
+	{.name = "wildcard", .id = O_WILDCARD, .type = XTTYPE_NONE},
 	{.name = "restore-skmark", .id = O_RESTORESKMARK, .type = XTTYPE_NONE},
 	XTOPT_TABLEEND,
 };
@@ -42,7 +42,7 @@ static void socklisten_mt_help_v2(void)
 {
 	printf(
 		"socklisten match options:\n"
-		"  --nowildcard     Do not ignore LISTEN sockets bound on INADDR_ANY\n"
+		"  --wildcard     Do not ignore LISTEN sockets bound on INADDR_ANY\n"
 		"  --transparent    Ignore non-transparent sockets\n\n");
 }
 
@@ -50,7 +50,7 @@ static void socklisten_mt_help_v3(void)
 {
 	printf(
 		"socklisten match options:\n"
-		"  --nowildcard     Do not ignore LISTEN sockets bound on INADDR_ANY\n"
+		"  --wildcard     Do not ignore LISTEN sockets bound on INADDR_ANY\n"
 		"  --transparent    Ignore non-transparent sockets\n"
 		"  --restore-skmark Set the packet mark to the socket mark if\n"
 		"                   the socket matches and transparent / \n"
@@ -78,8 +78,8 @@ static void socklisten_mt_parse_v2(struct xt_option_call *cb)
 	case O_TRANSPARENT:
 		info->flags |= XT_SOCKLISTEN_TRANSPARENT;
 		break;
-	case O_NOWILDCARD:
-		info->flags |= XT_SOCKLISTEN_NOWILDCARD;
+	case O_WILDCARD:
+		info->flags |= XT_SOCKLISTEN_WILDCARD;
 		break;
 	}
 }
@@ -93,8 +93,8 @@ static void socklisten_mt_parse_v3(struct xt_option_call *cb)
 	case O_TRANSPARENT:
 		info->flags |= XT_SOCKLISTEN_TRANSPARENT;
 		break;
-	case O_NOWILDCARD:
-		info->flags |= XT_SOCKLISTEN_NOWILDCARD;
+	case O_WILDCARD:
+		info->flags |= XT_SOCKLISTEN_WILDCARD;
 		break;
 	case O_RESTORESKMARK:
 		info->flags |= XT_SOCKLISTEN_RESTORESKMARK;
@@ -126,8 +126,8 @@ socklisten_mt_save_v2(const void *ip, const struct xt_entry_match *match)
 
 	if (info->flags & XT_SOCKLISTEN_TRANSPARENT)
 		printf(" --transparent");
-	if (info->flags & XT_SOCKLISTEN_NOWILDCARD)
-		printf(" --nowildcard");
+	if (info->flags & XT_SOCKLISTEN_WILDCARD)
+		printf(" --wildcard");
 }
 
 static void
@@ -145,8 +145,8 @@ socklisten_mt_save_v3(const void *ip, const struct xt_entry_match *match)
 
 	if (info->flags & XT_SOCKLISTEN_TRANSPARENT)
 		printf(" --transparent");
-	if (info->flags & XT_SOCKLISTEN_NOWILDCARD)
-		printf(" --nowildcard");
+	if (info->flags & XT_SOCKLISTEN_WILDCARD)
+		printf(" --wildcard");
 	if (info->flags & XT_SOCKLISTEN_RESTORESKMARK)
 		printf(" --restore-skmark");
 }
