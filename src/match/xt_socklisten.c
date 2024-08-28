@@ -30,33 +30,7 @@
 #include <net/netfilter/nf_conntrack.h>
 #endif
 
-static struct sock *
-nf_socketlisten_get_sock_v4(struct net *net, struct sk_buff *skb, const int doff,
-		      const u8 protocol,
-		      const __be32 saddr, const __be32 daddr,
-		      const __be16 sport, const __be16 dport,
-		      const struct net_device *in)
-{
-	u16 hnum;
-	struct sock* ret = NULL;
-	switch (protocol) {
-	case IPPROTO_TCP:
-		hnum = ntohs(dport);
-		ret = inet_lookup_listener(net, &tcp_hashinfo, skb, doff,
-				   saddr, sport, daddr, dport,
-				   hnum, in->ifindex);
-		if(ret && !refcount_inc_not_zero(&ret->sk_refcnt)){
-			ret = NULL;
-		}
-		break;
-	case IPPROTO_UDP:
-		ret = udp4_lib_lookup(net, saddr, sport, daddr, dport,
-				       in->ifindex);
-	}
-	return ret;
-}
-
-struct sock *nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
+struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
 				  const struct net_device *indev)
 {
 	__be32 daddr, saddr;
@@ -71,26 +45,27 @@ struct sock *nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
 	int doff = 0;
 	struct tcphdr _hdr;
 	struct udphdr *hp;
+	bool isTcp;
+	struct sock* ret = NULL;
 
-	if (iph->protocol != IPPROTO_UDP && iph->protocol != IPPROTO_TCP) {
+	protocol = iph->protocol;
+	if (protocol != IPPROTO_UDP && protocol != IPPROTO_TCP) {
 		return NULL;
 	}
 
-	hp = skb_header_pointer(skb, ip_hdrlen(skb),
-				iph->protocol == IPPROTO_UDP ?
-				sizeof(*hp) : sizeof(_hdr), &_hdr);
-	if (hp == NULL)
+	isTcp = protocol == IPPROTO_TCP;
+	doff = ip_hdrlen(skb);
+	hp = skb_header_pointer(skb, doff,
+				isTcp ?
+				sizeof(_hdr): sizeof(*hp), &_hdr);
+
+	if (unlikely(hp == NULL))
 		return NULL;
 
-	protocol = iph->protocol;
 	saddr = iph->saddr;
-	sport = hp->source;
 	daddr = iph->daddr;
+	sport = hp->source;
 	dport = hp->dest;
-	data_skb = (struct sk_buff *)skb;
-	doff = iph->protocol == IPPROTO_TCP ?
-		ip_hdrlen(skb) + __tcp_hdrlen((struct tcphdr *)hp) :
-		ip_hdrlen(skb) + sizeof(*hp);
 
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
 	/* Do the lookup with the original socket address in
@@ -98,17 +73,32 @@ struct sock *nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
 	 * SNAT-ted connection.
 	 */
 	ct = nf_ct_get(skb, &ctinfo);
-	if (ct && ctinfo == IP_CT_ESTABLISHED_REPLY) {
+	if (unlikely(ct && ctinfo == IP_CT_ESTABLISHED_REPLY)) {
 
 		daddr = ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3.ip;
-		dport = (iph->protocol == IPPROTO_TCP) ?
+		dport = isTcp ?
 			ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u.tcp.port :
 			ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u.udp.port;
 	}
 #endif
 
-	return nf_socketlisten_get_sock_v4(net, data_skb, doff, protocol, saddr,
-				     daddr, sport, dport, indev);
+	data_skb = (struct sk_buff *)skb;
+	doff += (isTcp ? __tcp_hdrlen((struct tcphdr *)hp) : sizeof(*hp));
+
+
+	if(isTcp) {
+		ret = inet_lookup_listener(net, &tcp_hashinfo, skb, doff,
+				   saddr, sport, daddr, dport,
+				   ntohs(dport), indev->ifindex);
+		if(ret && !refcount_inc_not_zero(&ret->sk_refcnt)){
+			ret = NULL;
+		}
+	} else {
+		ret = udp4_lib_lookup(net, saddr, sport, daddr, dport,
+				       indev->ifindex);
+	}
+
+	return ret;
 }
 
 /* "socket" match based redirection (no specific rule)
@@ -141,7 +131,7 @@ socklisten_match(const struct sk_buff *skb, struct xt_action_param *par,
 		sk = NULL;
 
 	if (!sk)
-		sk = nf_sk_lookup_slow_v4(xt_net(par), skb, xt_in(par));
+		sk = nf_sk_lookup_v4(xt_net(par), skb, xt_in(par));
 
 	if (sk) {
 		bool wildcard;
