@@ -62,16 +62,16 @@ struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
 	if (unlikely(hp == NULL))
 		return NULL;
 
-	saddr = iph->saddr;
-	daddr = iph->daddr;
-	sport = hp->source;
-	dport = hp->dest;
-
 	if(isTcp) {
 		// don't lookup listeners for SYN-ACK packets
 		if (hp->syn && hp->ack)
 			return NULL;
 	}
+
+	sport = hp->source;
+	dport = hp->dest;
+	saddr = iph->saddr;
+	daddr = iph->daddr;
 
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
 	/* Do the lookup with the original socket address in
