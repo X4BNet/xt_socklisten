@@ -43,8 +43,8 @@ struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
 	struct nf_conn const *ct;
 #endif
 	int doff = 0;
-	struct tcphdr _hdr;
-	struct udphdr *hp;
+	struct tcphdr _hdr; // fits a UDP header too
+	struct tcphdr *hp;
 	bool isTcp;
 	struct sock* ret = NULL;
 
@@ -57,7 +57,7 @@ struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
 	doff = ip_hdrlen(skb);
 	hp = skb_header_pointer(skb, doff,
 				isTcp ?
-				sizeof(_hdr): sizeof(*hp), &_hdr);
+				sizeof(_hdr): sizeof(struct udphdr), &_hdr);
 
 	if (unlikely(hp == NULL))
 		return NULL;
@@ -66,6 +66,12 @@ struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
 	daddr = iph->daddr;
 	sport = hp->source;
 	dport = hp->dest;
+
+	if(isTcp) {
+		// don't lookup listeners for SYN-ACK packets
+		if (hp->syn && hp->ack)
+			return NULL;
+	}
 
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
 	/* Do the lookup with the original socket address in
@@ -83,7 +89,7 @@ struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
 #endif
 
 	data_skb = (struct sk_buff *)skb;
-	doff += (isTcp ? __tcp_hdrlen((struct tcphdr *)hp) : sizeof(*hp));
+	doff += (isTcp ? __tcp_hdrlen(hp) : sizeof(struct udphdr));
 
 
 	if(isTcp) {
@@ -120,19 +126,13 @@ struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
  *     then local services could intercept traffic going through the
  *     box.
  */
-static bool
-socklisten_match(const struct sk_buff *skb, struct xt_action_param *par)
+static bool socklisten_match(struct sk_buff *skb, struct xt_action_param *par)
 {
-	struct sk_buff *pskb = (struct sk_buff *)skb;
 	struct sock *sk = skb->sk;
 	struct xt_socklisten_mtinfo1 *info;
 	bool to_clear;
 
-
-	if (sk && !net_eq(xt_net(par), sock_net(sk)))
-		sk = NULL;
-
-	if (!sk)
+	if (!sk || !net_eq(xt_net(par), sock_net(sk)))
 		sk = nf_sk_lookup_v4(xt_net(par), skb, xt_in(par));
 
 	if (sk) {
@@ -151,7 +151,7 @@ socklisten_match(const struct sk_buff *skb, struct xt_action_param *par)
 			to_clear = (info->flags & XT_SOCKLISTEN_TRANSPARENT) && !inet_sk_transparent(sk);
 		
 		if (info->flags & XT_SOCKLISTEN_RESTORESKMARK && !to_clear && sk_fullsock(sk))
-			pskb->mark = sk->sk_mark;
+			skb->mark = sk->sk_mark;
 
 		if (sk != skb->sk)
 			sock_gen_put(sk);
@@ -163,10 +163,9 @@ socklisten_match(const struct sk_buff *skb, struct xt_action_param *par)
 	return sk != NULL;
 }
 
-static bool
-socklisten_mt4_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
+static bool socklisten_mt4_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 {
-	return socklisten_match(skb, par);
+	return socklisten_match((struct sk_buff *)skb, par);
 }
 
 #if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
