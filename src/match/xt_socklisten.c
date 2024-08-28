@@ -121,11 +121,13 @@ struct sock *nf_sk_lookup_v4(struct net *net, const struct sk_buff *skb,
  *     box.
  */
 static bool
-socklisten_match(const struct sk_buff *skb, struct xt_action_param *par,
-	     const struct xt_socklisten_mtinfo1 *info)
+socklisten_match(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	struct sk_buff *pskb = (struct sk_buff *)skb;
 	struct sock *sk = skb->sk;
+	struct xt_socklisten_mtinfo1 *info;
+	bool to_clear;
+
 
 	if (sk && !net_eq(xt_net(par), sock_net(sk)))
 		sk = NULL;
@@ -134,30 +136,27 @@ socklisten_match(const struct sk_buff *skb, struct xt_action_param *par,
 		sk = nf_sk_lookup_v4(xt_net(par), skb, xt_in(par));
 
 	if (sk) {
-		bool wildcard;
-		bool transparent = true;
-
 		/* Ignore sockets listening on INADDR_ANY,
 		 * unless XT_SOCKLISTEN_WILDCARD is set
 		 */
-		wildcard = (!(info->flags & XT_SOCKLISTEN_WILDCARD) &&
+		info = par->matchinfo;
+		to_clear = (!(info->flags & XT_SOCKLISTEN_WILDCARD) &&
 			    sk_fullsock(sk) &&
 			    inet_sk(sk)->inet_rcv_saddr == 0);
 
 		/* Ignore non-transparent sockets,
 		 * if XT_SOCKLISTEN_TRANSPARENT is used
 		 */
-		if (info->flags & XT_SOCKLISTEN_TRANSPARENT)
-			transparent = inet_sk_transparent(sk);
-
-		if (info->flags & XT_SOCKLISTEN_RESTORESKMARK && !wildcard &&
-		    transparent && sk_fullsock(sk))
+		if(!to_clear)
+			to_clear = (info->flags & XT_SOCKLISTEN_TRANSPARENT) && !inet_sk_transparent(sk);
+		
+		if (info->flags & XT_SOCKLISTEN_RESTORESKMARK && !to_clear && sk_fullsock(sk))
 			pskb->mark = sk->sk_mark;
 
 		if (sk != skb->sk)
 			sock_gen_put(sk);
 
-		if (wildcard || !transparent)
+		if (to_clear)
 			sk = NULL;
 	}
 
@@ -165,19 +164,9 @@ socklisten_match(const struct sk_buff *skb, struct xt_action_param *par,
 }
 
 static bool
-socklisten_mt4_v0(const struct sk_buff *skb, struct xt_action_param *par)
-{
-	static struct xt_socklisten_mtinfo1 xt_info_v0 = {
-		.flags = 0,
-	};
-
-	return socklisten_match(skb, par, &xt_info_v0);
-}
-
-static bool
 socklisten_mt4_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 {
-	return socklisten_match(skb, par, par->matchinfo);
+	return socklisten_match(skb, par);
 }
 
 #if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
@@ -292,15 +281,6 @@ static int socklisten_mt_v3_check(const struct xt_mtchk_param *par)
 }
 
 static struct xt_match socklisten_mt_reg[] __read_mostly = {
-	{
-		.name		= "socklisten",
-		.revision	= 0,
-		.family		= NFPROTO_IPV4,
-		.match		= socklisten_mt4_v0,
-		.hooks		= (1 << NF_INET_PRE_ROUTING) |
-				  (1 << NF_INET_LOCAL_IN),
-		.me		= THIS_MODULE,
-	},
 	{
 		.name		= "socklisten",
 		.revision	= 1,
